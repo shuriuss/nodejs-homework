@@ -1,12 +1,8 @@
-const path = require("path");
-const fs = require("fs").promises;
-
-const contactsPath = path.join(process.cwd(), "models", "contacts.json");
+const { Contact } = require("../db/contactModel");
 
 async function contacts() {
-  const response = await fs.readFile(contactsPath, "utf-8");
-  const result = JSON.parse(response);
-  return result;
+  const contacts = await Contact.find({});
+  return contacts;
 }
 
 const listContacts = async () => {
@@ -39,7 +35,7 @@ const removeContact = async (contactId) => {
     if (newContact.length === contact.length) {
       return false;
     } else {
-      await fs.writeFile(contactsPath, JSON.stringify(newContact));
+      await Contact.findByIdAndDelete(contactId);
       return true;
     }
   } catch (error) {
@@ -48,16 +44,9 @@ const removeContact = async (contactId) => {
 };
 
 const addContact = async (body) => {
-  const { id, name, email, phone } = body;
   try {
-    const arr = await contacts();
-    arr.push({
-      id,
-      name,
-      email,
-      phone,
-    });
-    fs.writeFile(contactsPath, JSON.stringify(arr));
+    const contact = new Contact(body);
+    await contact.save();
   } catch (error) {
     console.error(error.message);
   }
@@ -68,19 +57,30 @@ const updateContact = async (contactId, body) => {
   try {
     const arr = await contacts();
     const index = arr.findIndex((el) => el.id === contactId);
-
     if (index < 0) {
       return false;
     } else {
-      arr.splice(index, 1);
-      const contact = {
-        id: contactId,
-        name,
-        email,
-        phone,
-      };
-      arr.push(contact);
-      fs.writeFile(contactsPath, JSON.stringify(arr));
+      await Contact.findByIdAndUpdate(contactId, {
+        $set: { name, email, phone },
+      });
+      return true;
+    }
+  } catch (error) {
+    console.error(error.message);
+  }
+};
+
+const updateStatusContact = async (contactId, body) => {
+  const { favorite } = body;
+  try {
+    const arr = await contacts();
+    const index = arr.findIndex((el) => el.id === contactId);
+    if (index < 0) {
+      return false;
+    } else {
+      await Contact.findByIdAndUpdate(contactId, {
+        $set: { favorite },
+      });
       return true;
     }
   } catch (error) {
@@ -95,4 +95,5 @@ module.exports = {
   addContact,
   updateContact,
   contacts,
+  updateStatusContact,
 };
