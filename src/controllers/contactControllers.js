@@ -1,90 +1,136 @@
 const { Contact } = require("../db/contactModel");
+const Joi = require("joi");
 
-async function contacts() {
-  const contacts = await Contact.find({});
-  return contacts;
-}
-
-const listContacts = async () => {
-  try {
-    const response = await contacts();
-    return response;
-  } catch (error) {
-    console.error(error.message);
-  }
-};
-
-const getContactById = async (contactId) => {
-  try {
-    const arr = await contacts();
-    const contact = arr.find((el) => el.id === contactId);
-    if (contact) {
-      return contact;
-    } else {
-      return false;
-    }
-  } catch (error) {
-    console.error(error.message);
-  }
-};
-
-const removeContact = async (contactId) => {
-  try {
-    const contact = await contacts();
-    const newContact = contact.filter((el) => el.id !== contactId);
-    if (newContact.length === contact.length) {
-      return false;
-    } else {
-      await Contact.findByIdAndDelete(contactId);
-      return true;
-    }
-  } catch (error) {
-    console.error(error.message);
-  }
-};
-
-const addContact = async (body) => {
-  try {
-    const contact = new Contact(body);
-    await contact.save();
-  } catch (error) {
-    console.error(error.message);
-  }
-};
-
-const updateContact = async (contactId, body) => {
-  const { name, email, phone } = body;
-  try {
-    const arr = await contacts();
-    const index = arr.findIndex((el) => el.id === contactId);
-    if (index < 0) {
-      return false;
-    } else {
-      await Contact.findByIdAndUpdate(contactId, {
-        $set: { name, email, phone },
+const listContacts = (req, res) => {
+  Contact.find().exec((error, contact) => {
+    if (error) {
+      res.status(500).send({
+        message: error.message,
       });
-      return true;
+    } else {
+      res.status(200).send(contact);
     }
-  } catch (error) {
-    console.error(error.message);
+  });
+};
+
+const getContactById = (req, res) => {
+  const { contactId } = req.params;
+  Contact.findById(contactId).exec((_, contact) => {
+    if (!contact) {
+      res.status(404).send({ message: "Not found" });
+    } else {
+      res.status(200).send({ data: contact });
+    }
+  });
+};
+
+const removeContact = (req, res) => {
+  const { contactId } = req.params;
+  Contact.findByIdAndDelete(contactId).exec((error, contactId) => {
+    if (error || !contactId) {
+      res.status(404).send({ message: `Not found contact` });
+    } else {
+      res.status(200).json({ message: "Contact deleted" });
+    }
+  });
+};
+
+const addContact = (req, res) => {
+  const schema = Joi.object({
+    name: Joi.string().alphanum().min(3).max(30).required(),
+    email: Joi.string().email({
+      minDomainSegments: 2,
+      tlds: { allow: ["com", "net"] },
+    }),
+    phone: Joi.string().min(12).max(20).required(),
+    favorite: Joi.boolean(),
+  });
+
+  const validation = schema.validate(req.body);
+
+  if (validation.error) {
+    res.status(400).json(validation.error.details);
+  } else {
+    const contact = new Contact(req.body);
+    contact.save((error, contact) => {
+      if (error) {
+        res.status(400).send({ message: error.message });
+      }
+      res.status(201).json({
+        data: contact,
+      });
+    });
   }
 };
 
-const updateStatusContact = async (contactId, body) => {
-  const { favorite } = body;
-  try {
-    const arr = await contacts();
-    const index = arr.findIndex((el) => el.id === contactId);
-    if (index < 0) {
-      return false;
-    } else {
-      await Contact.findByIdAndUpdate(contactId, {
+const updateContact = (req, res) => {
+  const { name, email, phone } = req.body;
+  const contactId = req.params.contactId;
+
+  const schema = Joi.object({
+    name: Joi.string().alphanum().min(3).max(30).required(),
+    email: Joi.string().email({
+      minDomainSegments: 2,
+      tlds: { allow: ["com", "net"] },
+    }),
+    phone: Joi.string().min(12).max(20).required(),
+    favorite: Joi.boolean(),
+  });
+  const validation = schema.validate(req.body);
+
+  if (validation.error) {
+    res.status(400).send({ message: "missing fields" });
+  } else {
+    Contact.findByIdAndUpdate(
+      contactId,
+      { $set: { name, email, phone } },
+      { new: true },
+      (error, contact) => {
+        if (error) {
+          res.status(400).send({ message: "Not found" });
+        } else {
+          res.status(200).send({
+            data: {
+              contact,
+            },
+          });
+        }
+      }
+    );
+  }
+};
+
+const updateStatusContact = (req, res) => {
+  const contactId = req.params.contactId;
+  const body = req.body;
+  const {favorite} = body
+
+  const schema = Joi.object({
+    favorite: Joi.boolean(),
+  });
+  const validation = schema.validate(body);
+  if (validation.error) {
+    res.status(400).send(
+      { message: "missing field favorite" });
+  } else {
+    Contact.findByIdAndUpdate(
+      contactId,
+      {
         $set: { favorite },
-      });
-      return true;
-    }
-  } catch (error) {
-    console.error(error.message);
+      },
+      { new: true },
+      (error, contact) => {
+        if (error) {
+          res.status(400).send({ message: "Not found" });
+        } else {
+          res.status(200).send({
+            data: {
+              contact,
+            },
+          });
+        }
+      }
+    );
   }
 };
 
@@ -94,6 +140,5 @@ module.exports = {
   removeContact,
   addContact,
   updateContact,
-  contacts,
   updateStatusContact,
 };
